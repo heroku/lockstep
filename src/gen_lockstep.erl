@@ -31,9 +31,6 @@
          call/3,
          cast/2]).
 
-%% Behavior callbacks
--export([behaviour_info/1]).
-
 %% gen_server callbacks
 -export([init/1,
          handle_call/3,
@@ -42,17 +39,29 @@
          terminate/2,
          code_change/3]).
 
-%% @hidden
-behaviour_info(callbacks) ->
-    [{init, 1},
-     {handle_call, 3},
-     {handle_msg, 2},
-     {handle_event, 2},
-     {current_seq_no, 1},
-     {terminate, 2}];
+%% Callback type specs.
+-callback init(Options::list()) ->
+    {'ok', Opts::list(), CbState::term()} |
+    {'error', term()}.
 
-behaviour_info(_) ->
-    undefined.
+-callback handle_call(Msg::term(), From::{pid(), reference()}, State) ->
+    {'reply', Reply::term(), State} |
+    {'stop', Reason::term(), State} |
+    {'stop', Reason::term(), Reply::term(), State}.
+
+-callback handle_msg(term(), State) ->
+    {'noreply', State} |
+    {'stop', Reason::term(), State}.
+
+-callback handle_event('connect' | 'disconnect' | {'error', term()}, State) ->
+    {'noreply', State} |
+    {'stop', Reason::term(), State}.
+
+-callback current_seq_no(State) ->
+    {non_neg_integer(), State}.
+
+-callback terminate(Reason::term(), State::term()) -> no_return().
+
 
 -record(state, {uri,
                 cb_state,
@@ -68,12 +77,10 @@ behaviour_info(_) ->
 %%====================================================================
 %% API functions
 %%====================================================================
--spec start_link(atom(), list(), [any()]) -> ok | ignore | {error, any()}.
 start_link(CallbackModule, LockstepUrl, InitParams) ->
     gen_server:start_link(?MODULE, [CallbackModule, LockstepUrl, InitParams],
                           [{spawn_opt, [{fullsweep_after, 0}]}]).
 
--spec start_link(atom(), atom(), list(), [any()]) -> ok | ignore | {error, any()}.
 start_link(RegisterName, CallbackModule, LockstepUrl, InitParams) ->
     gen_server:start_link({local, RegisterName}, ?MODULE,
                           [CallbackModule, LockstepUrl, InitParams],

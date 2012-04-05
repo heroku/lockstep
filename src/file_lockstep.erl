@@ -6,7 +6,7 @@
 -module(file_lockstep).
 
 %% Public API.
--export([run/2]).
+-export([run/2, estimate/2]).
 
 %% for timer:tc
 -export([foreach_line/3]).
@@ -27,6 +27,15 @@ run(Mod, File) ->
     after
         file:close(F)
     end.
+
+estimate({ok, PL}, NumRecs) ->
+    PerRec = proplists:get_value(time_per_record, PL),
+    Total = NumRecs * PerRec,
+    [{us, Total},
+     {ms, Total / 1000},
+     {s, Total / (1000 * 1000)},
+     {mins, Total / (1000 * 1000 * 60)},
+     {hours, Total / (1000 * 1000 * 60 * 60)}].
 
 cb_init(Mod) ->
     Mod:init([]).

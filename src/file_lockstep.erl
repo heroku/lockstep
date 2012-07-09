@@ -44,7 +44,7 @@ foreach_line(MS, F, Cnt) ->
     foreach_line(MS, F, file:read_line(F), Cnt).
 
 foreach_line({Callback, CbState}, F, {ok, Line}, Cnt) ->
-    case catch mochijson2:decode(Line) of
+    try mochijson2:decode(Line) of
         {struct, Props} ->
             case catch Callback:handle_msg(Props, CbState) of
                 {noreply, CbState1} ->
@@ -55,6 +55,9 @@ foreach_line({Callback, CbState}, F, {ok, Line}, Cnt) ->
                 {'EXIT', Err} ->
                     {Err, CbState, Cnt}
             end
+    catch
+        error:{badmatch, _} ->
+            foreach_line({Callback, CbState}, F, Cnt)
     end;
 foreach_line(MS, _F, eof, Cnt) ->
     {ok, MS, Cnt}.

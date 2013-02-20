@@ -232,6 +232,7 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
             Mod:close(Sock),
             disconnect(State);
         {Err, CbState1} ->
+            io:format("Error content length encoding ~p ~p~n", [Err, CbState1]),
             catch Callback:terminate(Err, CbState1),
             put(lockstep_event_end, {handle_info, error}),
             {stop, Err, State}

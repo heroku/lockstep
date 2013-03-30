@@ -35,8 +35,8 @@ parse_msgs(Data, ContentLen, Callback, CbState) ->
         {ok, <<"\r\n">>, Rest} ->
             parse_msgs(Rest, ContentLen - (size(Data)-size(Rest)), Callback, CbState);
         {ok, Line, Rest} ->
-            case (catch mochijson2:decode(Line)) of
-                {struct, Props} ->
+            case (catch jsx:decode(Line)) of
+                Props when is_list(Props) ->
                     case catch Callback:handle_msg(Props, CbState) of
                         {noreply, CbState1} ->
                             parse_msgs(Rest, ContentLen - (size(Data)-size(Rest)), Callback, CbState1);

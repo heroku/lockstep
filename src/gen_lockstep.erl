@@ -63,7 +63,8 @@ behaviour_info(_) ->
                 encoding,
                 content_length,
                 parser_mod,
-                buffer}).
+                buffer,
+                timeouts = 0}).
 
 -define(IDLE_TIMEOUT, get_env(idle_timeout)).
 
@@ -92,7 +93,6 @@ cast(Pid, Msg) ->
 %%====================================================================
 init([Callback, LockstepUrl, InitParams]) ->
     process_flag(trap_exit, true),
-    put(lockstep_timeouts, 0),
     case parse_uri(LockstepUrl) of
         {error, Err} ->
             {stop, {error, Err}, undefined};
@@ -246,8 +246,9 @@ when is_tuple(ClosedTuple) andalso
     put(lockstep_event_start, {handle_info, close}),
     close(State);
 
-handle_info(timeout, #state{sock_mod=OldSockMod, sock=OldSock, uri=Uri, cb_mod=Callback, cb_state=CbState}=State) ->
-    put(lockstep_timeouts, get(lockstep_timeouts)+1),
+handle_info(timeout, #state{sock_mod=OldSockMod, sock=OldSock, uri=Uri, cb_mod=Callback, cb_state=CbState,
+                            timeouts=Timeouts} = State) ->
+    State0 = State#state{ timeouts=Timeouts + 1 },
     put(lockstep_event_start, {handle_info, timeout}),
     catch OldSockMod:close(OldSock),
     put(lockstep_event_start, {handle_info, timeout, connect}),
@@ -257,33 +258,33 @@ handle_info(timeout, #state{sock_mod=OldSockMod, sock=OldSock, uri=Uri, cb_mod=C
             case send_req(Sock, Mod, Uri, Callback, CbState) of
                 {ok, CbState1} ->
                     put(lockstep_event_end, {handle_info, timeout}),
-                    {noreply, State#state{sock=Sock, sock_mod=Mod, cb_state=CbState1, buffer = <<>>}};
+                    {noreply, State0#state{sock=Sock, sock_mod=Mod, cb_state=CbState1, buffer = <<>>}};
                 {error, Err, CbState1} ->
                     put(lockstep_event_start, {handle_info, timeout, notify_callback, Err}),
                     case notify_callback(Err, Callback, CbState1) of
                         {ok, CbState2} ->
                             put(lockstep_event_end, {handle_info, error}),
-                            {noreply, State#state{cb_state=CbState2, buffer = <<>>}, 0};  
+                            {noreply, State0#state{cb_state=CbState2, buffer = <<>>}, 0};  
                         {Err, CbState2} ->
                             catch Callback:terminate(Err, CbState2),
                             put(lockstep_event_end, {handle_info, timeout, Err}),
-                            {stop, Err, State}
+                            {stop, Err, State0}
                     end;
                 {Err, CbState1} ->
                     catch Callback:terminate(Err, CbState1),
                     put(lockstep_event_end, {handle_info, error, Err}),
-                    {stop, Err, State}
+                    {stop, Err, State0}
             end;
         Err ->
             put(lockstep_event_start, {handle_info, timeout, notify_callback, Err}),
             case notify_callback(Err, Callback, CbState) of
                 {ok, CbState1} ->
                     put(lockstep_event_end, {handle_info, timeout}),
-                    {noreply, State#state{cb_state=CbState1, buffer = <<>>}, 0};  
+                    {noreply, State0#state{cb_state=CbState1, buffer = <<>>}, 0};  
                 {Err, CbState1} ->
                     catch Callback:terminate(Err, CbState1),
                     put(lockstep_event_end, {handle_info, error, Err}),
-                    {stop, Err, State}
+                    {stop, Err, State0}
             end
     end;
 

@@ -113,54 +113,40 @@ init([Callback, LockstepUrl, InitParams]) ->
     end.
 
 handle_call({call, Msg}, From, #state{cb_mod=Callback, cb_state=CbState}=State) ->
-    put(lockstep_event_start, {handle_call, Msg}),
     case catch Callback:handle_call(Msg, From, CbState) of
         {reply, Reply, CbState1} ->
-            put(lockstep_event_end, {handle_call, Reply}),
             {reply, Reply, State#state{cb_state=CbState1}};
         {stop, Reason, CbState1} ->
             catch Callback:terminate(Reason, CbState1),
-            put(lockstep_event_end, {handle_call, Reason}),
             {stop, Reason, State#state{cb_state=CbState1}};
         {stop, Reason, Reply, CbState1} ->
             catch Callback:terminate(Reason, CbState1),
-            put(lockstep_event_end, {handle_call, Reply}),
             {stop, Reason, Reply, State#state{cb_state=CbState1}};
         {'EXIT', Err} ->
             catch Callback:terminate(Err, CbState),
-            put(lockstep_event_end, {handle_call, Err}),
             {stop, Err, State}
     end;
 
 handle_call(_Message, _From, State) ->
-    put(lockstep_event_start, {handle_call, _Message}),
-    put(lockstep_event_end, {handle_call, none}),
     {reply, error, State}.
 
 handle_cast(_Message, State) ->
-    put(lockstep_event_start, {handle_cast, _Message}),
-    put(lockstep_event_end, {handle_cast, none}),
     {noreply, State}.
 
 handle_info({Proto, Sock, {http_response, _Vsn, Status, _}}, #state{sock_mod=Mod, cb_mod=Callback}=State) when Proto == http; Proto == ssl ->
-    put(lockstep_event_start, {handle_info, http_response}),
     case Status >= 200 andalso Status < 300 of
         true ->
             setopts(Mod, Sock, [{active, once}]),
-            put(lockstep_event_end, {handle_info, State}),
             {noreply, State};
         false ->
             catch Callback:terminate({http_status, Status}, State#state.cb_state),
-            put(lockstep_event_end, {handle_info, State}),
             {stop, {http_status, Status}, State}
     end;
 
 handle_info({Proto, Sock, {http_header, _, Key, _, Val}}, #state{sock_mod=Mod, cb_mod=Callback, cb_state=CbState}=State) when Proto == http; Proto == ssl ->
-    put(lockstep_event_start, {handle_info, http_header}),
     setopts(Mod, Sock, [{active, once}]),
     case [Key, Val] of
         [<<"Instance-Name">>, InstanceName] ->
-            put(lockstep_event_end, {handle_info, chunked}),
             case notify_callback({instance_name, InstanceName}, Callback, CbState) of
                 {ok, CbState1} ->
                     {noreply, State#state{cb_state=CbState1}};
@@ -168,29 +154,23 @@ handle_info({Proto, Sock, {http_header, _, Key, _, Val}}, #state{sock_mod=Mod, c
                     {stop, Err, State#state{cb_state=CbState1}}
             end;
         ['Transfer-Encoding', <<"chunked">>] ->
-            put(lockstep_event_end, {handle_info, chunked}),
             {noreply, State#state{encoding=chunked}};
         ['Content-Length', ContentLength] ->
-            put(lockstep_event_end, {handle_info, content_length}),
             {noreply, State#state{content_length=list_to_integer(binary_to_list(ContentLength))}};
         _ ->
             {noreply, State}
     end;
 
 handle_info({Proto, Sock, http_eoh}, #state{cb_mod=Callback, sock=Sock, sock_mod=Mod, encoding=Enc, content_length=Len}=State) when Proto == http; Proto == ssl ->
-    put(lockstep_event_start, {handle_info, http_eoh}),
     case [Enc, Len] of
         [chunked, _] ->
             setopts(Mod, Sock, [{active, once}, {packet, raw}]),
-            put(lockstep_event_end, {handle_info, chunked_parser}),
             {noreply, State#state{parser_mod=chunked_parser}};
         [_, Len] when is_integer(Len) ->
             setopts(Mod, Sock, [{active, once}, {packet, raw}]),
-            put(lockstep_event_end, {handle_info, chunked_len_parser}),
             {noreply, State#state{parser_mod=content_len_parser}};
         _ ->
             catch Callback:terminate({error, unrecognized_encoding}, State#state.cb_state),
-            put(lockstep_event_end, {handle_info, error}),
             {stop, {error, unrecognized_encoding}, State}
     end;
 
@@ -200,18 +180,15 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
                                         parser_mod=chunked_parser,
                                         buffer=Buffer}=State)
   when Proto == tcp; Proto == ssl ->
-    put(lockstep_event_start, {handle_info, chunked_parser}),
     case chunked_parser:parse_msgs(<<Buffer/binary, Data/binary>>, Callback, CbState0) of
         {ok, CbState1, Rest} ->
             setopts(Mod, Sock, [{active, once}]),
-            put(lockstep_event_end, {handle_info, CbState1}),
             {noreply, State#state{cb_state=CbState1, buffer=Rest}, ?IDLE_TIMEOUT};
         {ok, end_of_stream} ->
             Mod:close(Sock),
             disconnect(State);
         {Err, CbState1} ->
             catch Callback:terminate(Err, CbState1),
-            put(lockstep_event_end, {handle_info, error}),
             {stop, Err, State}
     end;
 
@@ -222,18 +199,15 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
                                         content_length=ContentLen,
                                         buffer=Buffer}=State)
   when Proto == tcp; Proto == ssl ->
-    put(lockstep_event_start, {handle_info, content_len_parser}),
     case content_len_parser:parse_msgs(<<Buffer/binary, Data/binary>>, ContentLen, Callback, CbState0) of
         {ok, CbState1, ContentLen1, Rest} ->
             setopts(Mod, Sock, [{active, once}]),
-            put(lockstep_event_end, {handle_info, CbState1}),
             {noreply, State#state{cb_state=CbState1, content_length=ContentLen1, buffer=Rest}, ?IDLE_TIMEOUT};
         {ok, end_of_body} ->
             Mod:close(Sock),
             disconnect(State);
         {Err, CbState1} ->
             catch Callback:terminate(Err, CbState1),
-            put(lockstep_event_end, {handle_info, error}),
             {stop, Err, State}
     end;
 
@@ -243,47 +217,35 @@ when is_tuple(ClosedTuple) andalso
      element(1, ClosedTuple) == ssl_closed orelse
      element(1, ClosedTuple) == tcp_error orelse
      element(1, ClosedTuple) == ssl_error) ->
-    put(lockstep_event_start, {handle_info, close}),
     close(State);
 
 handle_info(timeout, #state{sock_mod=OldSockMod, sock=OldSock, uri=Uri, cb_mod=Callback, cb_state=CbState,
                             timeouts=Timeouts} = State) ->
     State0 = State#state{ timeouts=Timeouts + 1 },
-    put(lockstep_event_start, {handle_info, timeout}),
     catch OldSockMod:close(OldSock),
-    put(lockstep_event_start, {handle_info, timeout, connect}),
     case connect(Uri) of
         {ok, Mod, Sock} ->
-            put(lockstep_event_start, {handle_info, timeout, send_req}),
             case send_req(Sock, Mod, Uri, Callback, CbState) of
                 {ok, CbState1} ->
-                    put(lockstep_event_end, {handle_info, timeout}),
                     {noreply, State0#state{sock=Sock, sock_mod=Mod, cb_state=CbState1, buffer = <<>>}};
                 {error, Err, CbState1} ->
-                    put(lockstep_event_start, {handle_info, timeout, notify_callback, Err}),
                     case notify_callback(Err, Callback, CbState1) of
                         {ok, CbState2} ->
-                            put(lockstep_event_end, {handle_info, error}),
                             {noreply, State0#state{cb_state=CbState2, buffer = <<>>}, 0};  
                         {Err, CbState2} ->
                             catch Callback:terminate(Err, CbState2),
-                            put(lockstep_event_end, {handle_info, timeout, Err}),
                             {stop, Err, State0}
                     end;
                 {Err, CbState1} ->
                     catch Callback:terminate(Err, CbState1),
-                    put(lockstep_event_end, {handle_info, error, Err}),
                     {stop, Err, State0}
             end;
         Err ->
-            put(lockstep_event_start, {handle_info, timeout, notify_callback, Err}),
             case notify_callback(Err, Callback, CbState) of
                 {ok, CbState1} ->
-                    put(lockstep_event_end, {handle_info, timeout}),
                     {noreply, State0#state{cb_state=CbState1, buffer = <<>>}, 0};  
                 {Err, CbState1} ->
                     catch Callback:terminate(Err, CbState1),
-                    put(lockstep_event_end, {handle_info, error, Err}),
                     {stop, Err, State0}
             end
     end;
@@ -310,15 +272,12 @@ handle_close_or_disconnect(Event, #state{cb_mod=Callback, cb_state=CbState}=Stat
   when Event == close; Event == disconnect ->
     case catch Callback:handle_event(Event, CbState) of
         {noreply, CbState1} ->
-            put(lockstep_event_end, {handle_info, CbState1}),
             {noreply, State#state{cb_state=CbState1, buffer = <<>>}, 0};
         {stop, Reason, CbState1} ->
             catch Callback:terminate(Reason, CbState1),
-            put(lockstep_event_end, {handle_info, Reason}),
             {stop, Reason, State};
         {'EXIT', Err} ->
             catch Callback:terminate(Err, CbState),
-            put(lockstep_event_end, {handle_info, Err}),
             {stop, Err, State}
     end.
 

@@ -58,6 +58,7 @@ init_per_testcase(connect_and_chunked, Config) ->
      {server, Server},
      {tid, Tid}|Config];
 init_per_testcase(connect_sends_client_id, Config) ->
+    true = os:putenv("INSTANCE_NAME", "testing-client"),
     Tid = ets:new(connect_content_length, [public]),
     {Server, Url} = get_server(fun(Req) ->
                                        connect_content_length_loop(Req, Tid)
@@ -124,6 +125,7 @@ end_per_testcase(connect_and_chunked, Config) ->
     mochiweb_http:stop(?config(server, Config)),
     Config;
 end_per_testcase(connect_sends_client_id, Config) ->
+    true = os:unsetenv("INSTANCE_NAME"),
     ets:delete(?config(tid, Config)),
     mochiweb_http:stop(?config(server, Config)),
     Config;
@@ -194,10 +196,11 @@ connect_and_chunked(Config) ->
     'GET' = proplists:get_value(method, Values),
     "/" = proplists:get_value(path, Values),
     [{"since", "0"}] = proplists:get_value(qs, Values),
+    undefined = proplists:get_value(client_id, Values),
     Config.
 
 connect_sends_client_id(Config) ->
-    CurrentNode = atom_to_list(node()),
+    ClientID = "testing-client",
     Tid = ?config(tid, Config),
     {ok, Pid}  = gen_lockstep:start_link(lockstep_gen_callback,
                                          ?config(url, Config), [Tid]),
@@ -209,7 +212,7 @@ connect_sends_client_id(Config) ->
     'GET' = proplists:get_value(method, Values),
     "/" = proplists:get_value(path, Values),
     [{"since", "0"}] = proplists:get_value(qs, Values),
-    CurrentNode = proplists:get_value(client_id, Values),
+    ClientID = proplists:get_value(client_id, Values),
     Config.
 
 reconnect(Config) ->

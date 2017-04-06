@@ -421,7 +421,11 @@ authorization(UserPass) ->
     [<<"Authorization: Basic ">>, Auth, <<"\r\n">>].
 
 client_id() ->
-  [<<"X-Client-ID: ">>, atom_to_list(node()), <<"\r\n">>].
+    case os:getenv("INSTANCE_NAME") of
+        false -> [];
+        InstanceName ->
+            [<<"X-Client-ID: ">>, InstanceName, <<"\r\n">>]
+    end.
 
 send_req(IsRedirect, Sock, Mod, {_Proto, Pass, Host, _Port, Path, QS}, Callback, CbState) ->
     try Callback:handle_event(connect, CbState) of

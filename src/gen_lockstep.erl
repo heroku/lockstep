@@ -243,6 +243,7 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
             Mod:close(Sock),
             disconnect(State);
         {Err, CbState1} ->
+            error_logger:info_report([{parse_error, Err}, {content_len, ContentLen}, {data, Data}]),
             catch Callback:terminate(Err, CbState1),
             {stop, Err, anonymize(State)}
     end;

@@ -1,4 +1,4 @@
-REBAR := $(shell which rebar)
+REBAR := $(shell which rebar3)
 
 all: compile
 

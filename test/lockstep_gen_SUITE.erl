@@ -19,6 +19,7 @@ all() ->
     ,timeout
     ,connect_timeout
     ,unauthorized
+    ,custom_headers
     ].
 
 init_per_suite(Config) ->
@@ -98,6 +99,12 @@ init_per_testcase(unauthorized, Config) ->
     [{url, Url1},
      {server, Server},
      {tid, Tid}|Config];
+init_per_testcase(custom_headers, Config) ->
+    Tid = ets:new(custom_headers, [public]),
+    {Server, Url} = get_server(fun(Req) -> custom_headers_loop(Req, Tid) end),
+    [{url, Url},
+     {server, Server},
+     {tid, Tid}|Config];
 init_per_testcase(_CaseName, Config) ->
     Config.
 
@@ -133,6 +140,10 @@ end_per_testcase(connect_url_fun, Config) ->
     mochiweb_http:stop(?config(server, Config)),
     Config;
 end_per_testcase(unauthorized, Config) ->
+    ets:delete(?config(tid, Config)),
+    mochiweb_http:stop(?config(server, Config)),
+    Config;
+end_per_testcase(custom_headers, Config) ->
     ets:delete(?config(tid, Config)),
     mochiweb_http:stop(?config(server, Config)),
     Config;
@@ -269,6 +280,18 @@ unauthorized(Config) ->
     [{"since", "0"}] = proplists:get_value(qs, Values),
     Config.
 
+custom_headers(Config) ->
+    Tid = ?config(tid, Config),
+    {ok, Pid} = gen_lockstep:start_link(lockstep_gen_callback,
+                                        ?config(url, Config), [Tid]),
+    true = is_pid(Pid) and is_process_alive(Pid),
+    timer:sleep(200),
+    [{instance_name, <<"test_custom_headers">>}] = ets:lookup(Tid, instance_name),
+    [{meta_count, 123}] = ets:lookup(Tid, meta_count),
+    Config.
+
+
+
 %% Loops
 connect_redirect(Req, Url) ->
     Req:respond({307, [{"Location", Url}], []}).
@@ -358,6 +381,10 @@ unauthorized_loop(Req, Tid) ->
                                    {path, Path},
                                    {qs, Query}]})
     end.
+
+custom_headers_loop(Req, Tid) ->
+    Req:respond({200, [{"Instance-Name", "test_custom_headers"},
+                       {"x-amz-meta-count", "123"}], ""}).
 
 %% Internal
 wait_for_register(Name) ->

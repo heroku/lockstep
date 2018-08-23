@@ -189,6 +189,8 @@ handle_info({Proto, Sock, {http_header, _, Key, _, Val}}, #state{sock_mod=Mod}=S
     case [Key, Val] of
         [<<"Instance-Name">>, InstanceName] ->
             notify_callback({instance_name, InstanceName}, State);
+        [<<"X-Amz-Meta-Count">>, Count] ->
+            notify_callback({meta_count, list_to_integer(binary_to_list(Count))}, State);
         ['Transfer-Encoding', <<"chunked">>] ->
             {noreply, State#state{encoding=chunked}};
         ['Content-Length', ContentLength] ->

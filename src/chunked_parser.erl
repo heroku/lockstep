@@ -30,7 +30,7 @@ parse_msgs(<<>>, _Callback, CbState) ->
 parse_msgs(Data, Callback, CbState) ->
     case read_size(Data) of
         {ok, 0, _Rest} ->
-            {ok, end_of_stream};
+            {ok, end_of_stream, CbState};
         {ok, Size, Rest} ->
             case read_chunk(Rest, Size) of
                 {ok, <<"\r\n">>, Rest1} ->

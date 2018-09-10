@@ -43,6 +43,12 @@ handle_event({client_error, 401}, #hstate{tid=Tid}=HandlerState) ->
     [{correct_url, CorrectURL}] = ets:lookup(Tid, correct_url),
     true = ets:insert(Tid, {changed_url, true}),
     {connect_url, CorrectURL, HandlerState};
+handle_event({instance_name, InstanceName}, #hstate{tid=Tid}=HandlerState) ->
+    true = ets:insert(Tid, {instance_name, InstanceName}),
+    {noreply, HandlerState};
+handle_event({meta_count, Count}, #hstate{tid=Tid}=HandlerState) ->
+    true = ets:insert(Tid, {meta_count, Count}),
+    {noreply, HandlerState};
 handle_event(_Event, HandlerState) ->
     {noreply, HandlerState}.
 

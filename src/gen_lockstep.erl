@@ -222,9 +222,9 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
         {ok, CbState1, Rest} ->
             setopts(Mod, Sock, [{active, once}]),
             {noreply, State#state{cb_state=CbState1, buffer=Rest}, ?IDLE_TIMEOUT};
-        {ok, end_of_stream} ->
+        {ok, end_of_stream, CbState1} ->
             Mod:close(Sock),
-            disconnect(State);
+            disconnect(State#state{cb_state = CbState1});
         {Err, CbState1} ->
             error_logger:info_report([{chunked_parse_error, Err}, {data, Data}]),
             catch Callback:terminate(Err, CbState1),
@@ -242,9 +242,9 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
         {ok, CbState1, ContentLen1, Rest} ->
             setopts(Mod, Sock, [{active, once}]),
             {noreply, State#state{cb_state=CbState1, content_length=ContentLen1, buffer=Rest}, ?IDLE_TIMEOUT};
-        {ok, end_of_body} ->
+        {ok, end_of_body, CbState1} ->
             Mod:close(Sock),
-            disconnect(State);
+            disconnect(State#state{cb_state = CbState1});
         {Err, CbState1} ->
             error_logger:info_report([{parse_error, Err}, {content_len, ContentLen}, {data, Data}]),
             catch Callback:terminate(Err, CbState1),

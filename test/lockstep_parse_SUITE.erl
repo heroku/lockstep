@@ -23,6 +23,7 @@ groups() ->
       [
        content_len_parser
        ,content_len_many_messages
+       ,content_len_parser_end_of_body
       ]
      }].
 
@@ -63,7 +64,7 @@ chunked_parser(Config) ->
     Message0 = chunkify(Message),
     Message1 = close_chunk(Message0),
     Message2 = to_bin(Message1),
-    {ok, end_of_stream} = chunked_parser:parse_msgs(Message2, lockstep_parse_callback, {chunked_parser, Table}),
+    {ok, end_of_stream, {chunked_parser, Table}} = chunked_parser:parse_msgs(Message2, lockstep_parse_callback, {chunked_parser, Table}),
     [{chunked_parser, Result}] = ets:lookup(Table, chunked_parser),
     ok = compare(Data, Result),
     Config.
@@ -73,16 +74,16 @@ chunked_partial_parse(Config) ->
     Message2 = chunkify(create_message(get_message())),
     Message3 = close_chunk(Message1++Message2),
     {PartM1, PartM2} = lists:split(random:uniform(length(Message3)), Message3),
-    {ok, undefined, Rest} = chunked_parser:parse_msgs(to_bin(PartM1), lockstep_parse_callback, 
+    {ok, undefined, Rest} = chunked_parser:parse_msgs(to_bin(PartM1), lockstep_parse_callback,
                                                       undefined),
-    {ok, end_of_stream} = chunked_parser:parse_msgs(<<Rest/binary, (to_bin(PartM2))/binary>>, 
+    {ok, end_of_stream, undefined} = chunked_parser:parse_msgs(<<Rest/binary, (to_bin(PartM2))/binary>>,
                                                     lockstep_parse_callback, undefined),
     Config.
 
 chunked_heartbeat(Config) ->
     Table = ?config(tid, Config),
     Beat = close_chunk(chunkify("\r\n")),
-    {ok, end_of_stream} = chunked_parser:parse_msgs(to_bin(Beat), lockstep_parse_callback,
+    {ok, end_of_stream, {chunked_heartbeat, Table}} = chunked_parser:parse_msgs(to_bin(Beat), lockstep_parse_callback,
                                                     {chunked_heartbeat, Table}),
     [{chunked_heartbeat, heartbeat}] = ets:lookup(Table, chunked_heartbeat),
     Config.
@@ -125,6 +126,9 @@ content_len_many_messages(Config) ->
     ok = compare(Data2, Message3),
     Config.
 
+content_len_parser_end_of_body(Config) ->
+    {ok, end_of_body, fake_state} = content_len_parser:parse_msgs(<<>>, 0, fake_callback, fake_state).
+
 % Internal
 compare([], _) ->
     ok;
@@ -157,7 +161,7 @@ create_message(List) ->
 
 chunkify(Data) when is_list(Data) ->
     Length = iolist_size(Data),
-    io_lib:format("~.16b\r\n", [Length]) ++ Data ++ "\r\n".    
+    io_lib:format("~.16b\r\n", [Length]) ++ Data ++ "\r\n".
 
 close_chunk(Bin) ->
     Bin ++ "0\r\n\r\n".

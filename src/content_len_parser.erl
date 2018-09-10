@@ -24,8 +24,8 @@
 -module(content_len_parser).
 -export([parse_msgs/4]).
 
-parse_msgs(<<>>, 0, _Callback, _CbState) ->
-    {ok, end_of_body};
+parse_msgs(<<>>, 0, _Callback, CbState) ->
+    {ok, end_of_body, CbState};
 
 parse_msgs(<<>>, ContentLen, _Callback, CbState) ->
     {ok, CbState, ContentLen, <<>>};

@@ -42,6 +42,9 @@ end_per_suite(Config) ->
 init_per_testcase(chunked_parser, Config) ->
     Tid = ets:new(chunked_parser, [public]),
     [{tid, Tid}|Config];
+init_per_testcase(chunked_partial_parse, Config) ->
+    Tid = ets:new(chunked_partial_parse, [public, bag]),
+    [{tid, Tid}|Config];
 init_per_testcase(chunked_heartbeat, Config) ->
     Tid = ets:new(chunked_heartbeat, [public]),
     [{tid, Tid}|Config];
@@ -70,14 +73,21 @@ chunked_parser(Config) ->
     Config.
 
 chunked_partial_parse(Config) ->
-    Message1 = chunkify(create_message(get_message())),
-    Message2 = chunkify(create_message(get_message())),
+    Table = ?config(tid, Config),
+    Callback = {chunked_partial_parse, Table},
+    Data1 = get_message(),
+    Data2 = get_message(),
+    Message1 = chunkify(create_message(Data1)),
+    Message2 = chunkify(create_message(Data2)),
     Message3 = close_chunk(Message1++Message2),
     {PartM1, PartM2} = lists:split(random:uniform(length(Message3)), Message3),
-    {ok, undefined, Rest} = chunked_parser:parse_msgs(to_bin(PartM1), lockstep_parse_callback,
-                                                      undefined),
-    {ok, end_of_stream, undefined} = chunked_parser:parse_msgs(<<Rest/binary, (to_bin(PartM2))/binary>>,
-                                                    lockstep_parse_callback, undefined),
+    {ok, Callback, Rest} = chunked_parser:parse_msgs(to_bin(PartM1), lockstep_parse_callback,
+                                                      Callback),
+    {ok, end_of_stream, Callback} = chunked_parser:parse_msgs(<<Rest/binary, (to_bin(PartM2))/binary>>,
+                                                    lockstep_parse_callback, Callback),
+    [{_, Result1}, {_, Result2}] = ets:lookup(Table, chunked_partial_parse),
+    ok = compare(Data1, Result1),
+    ok = compare(Data2, Result2),
     Config.
 
 chunked_heartbeat(Config) ->

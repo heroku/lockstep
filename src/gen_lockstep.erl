@@ -219,12 +219,12 @@ handle_info({Proto, Sock, Data}, #state{cb_mod=Callback,
                                         buffer=Buffer}=State)
   when Proto == tcp; Proto == ssl ->
     case chunked_parser:parse_msgs(<<Buffer/binary, Data/binary>>, Callback, CbState0) of
-        {ok, CbState1, Rest} ->
-            setopts(Mod, Sock, [{active, once}]),
-            {noreply, State#state{cb_state=CbState1, buffer=Rest}, ?IDLE_TIMEOUT};
         {ok, end_of_stream, CbState1} ->
             Mod:close(Sock),
             disconnect(State#state{cb_state = CbState1});
+        {ok, CbState1, Rest} ->
+            setopts(Mod, Sock, [{active, once}]),
+            {noreply, State#state{cb_state=CbState1, buffer=Rest}, ?IDLE_TIMEOUT};
         {Err, CbState1} ->
             error_logger:info_report([{chunked_parse_error, Err}, {data, Data}]),
             catch Callback:terminate(Err, CbState1),

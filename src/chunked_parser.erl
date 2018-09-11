@@ -59,9 +59,7 @@ parse_msgs(Data, Callback, CbState) ->
                     {ok, CbState, Data};
                 {error, malformed_chunk} ->
                     error_logger:info_report([{error, malformed_chunk}, {size, Size}, {data, Data}]),
-                    {error, malformed_chunk};
-                Err ->
-                    {Err, CbState}
+                    {error, malformed_chunk}
             end;
         eof ->
             {ok, CbState, Data};
@@ -76,7 +74,7 @@ read_size(Data) ->
                 {ok, [Size], []} ->
                     {ok, Size, Rest};
                 _ ->
-                    {error, {poorly_formatted_size, Line}} 
+                    {error, {poorly_formatted_size, Line}}
             end;
         Err ->
             Err

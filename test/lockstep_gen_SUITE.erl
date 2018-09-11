@@ -220,7 +220,7 @@ reconnect(Config) ->
     Config.
 
 timeout(Config) ->
-    % Check timeout
+    % Check idle timeout
     register(timeout, self()),
     Tid = ?config(tid, Config),
     {ok, Pid} = gen_lockstep:start_link(lockstep_gen_callback,
@@ -238,7 +238,7 @@ timeout(Config) ->
         new_connection ->
             [{count, 2}] = ets:lookup(Tid, count),
             loop ! close
-    after 100 ->
+    after 1000 ->
             throw(timeout)
     end,
     bye = gen_lockstep:call(Pid, stop_test, 1000),

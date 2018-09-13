@@ -317,8 +317,8 @@ handle_close_or_disconnect(Event, State)
     end.
 
 %% attempt to reconnect every 5s for 2 minutes
--define(RECONNECT_TIMEOUT, timer:seconds(5)).
--define(RECONNECT_ATTEMPTS, 24).
+-define(RECONNECT_TIMEOUT, application:get_env(lockstep, reconnect_timeout, timer:seconds(5))).
+-define(RECONNECT_ATTEMPTS, application:get_env(lockstep, reconnect_attempts, 24)).
 
 connect(Url) when is_list(Url) ->
     Uri = parse_uri(Url),

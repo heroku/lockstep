@@ -24,6 +24,8 @@ all() ->
 
 init_per_suite(Config) ->
     application:load(lockstep),
+    application:set_env(lockstep, reconnect_timeout, timer:seconds(5)),
+    application:set_env(lockstep, reconnect_attempts, 2),
     application:start(meck),
     Config.
 

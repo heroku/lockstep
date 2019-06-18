@@ -85,7 +85,9 @@
          handle_cast/2,
          handle_info/2,
          terminate/2,
-         code_change/3]).
+         code_change/3,
+         format_status/2
+        ]).
 
 -record(state, {url,
                 snapshot_url,
@@ -299,6 +301,14 @@ terminate(Reason, #state{sock_mod=Mod, sock=Sock, cb_mod=Callback, cb_state=CbSt
 
 code_change(_OldVersion, State, _Extra) ->
     {ok, State}.
+
+format_status(terminate, [_PDict, State]) ->
+    %% hide potential secrets
+    NewState = State#state{url = hidden, snapshot_url = hidden},
+    [{data, [{"State", NewState}]}];
+format_status(_ , [_PDict, State]) ->
+    %% default case
+    [{data, [{"State", State}]}].
 
 %% Internal functions
 close(State) ->
